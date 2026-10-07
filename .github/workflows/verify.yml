@@ -1,0 +1,67 @@
+name: verify
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: "Job id (results are published as results/<job_id>.json)"
+        required: true
+        type: string
+      payload:
+        description: 'Payload JSON: {"line": "...", "candidates": [{"url","title"}]}'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Cache CLIP models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: clip-models-v1
+
+      - name: Write payload
+        env:
+          PAYLOAD: ${{ inputs.payload }}
+        run: printf '%s' "$PAYLOAD" > payload.json
+
+      - name: Install dependencies
+        run: pip install -r requirements-server.txt
+
+      - name: Run checker
+        run: python run_verify.py payload.json out.json
+
+      - name: Publish results to verify-results branch
+        env:
+          JOB_ID: ${{ inputs.job_id }}
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp out.json "/tmp/result-${JOB_ID}.json"
+          if git fetch origin verify-results 2>/dev/null; then
+            git checkout -B verify-results origin/verify-results
+          else
+            git checkout --orphan verify-results
+            git rm -rf . >/dev/null 2>&1 || true
+            printf '# verify-results\nChecker results, one JSON file per job.\n' > README.md
+            git add README.md
+            git commit -m "Init verify-results branch"
+          fi
+          mkdir -p results
+          cp "/tmp/result-${JOB_ID}.json" "results/${JOB_ID}.json"
+          git add "results/${JOB_ID}.json"
+          git commit -m "Verify results ${JOB_ID}"
+          git push origin verify-results
