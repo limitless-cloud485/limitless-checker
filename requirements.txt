@@ -1,0 +1,7 @@
+gradio
+onnxruntime
+tokenizers
+pillow
+numpy
+requests
+huggingface_hub
