@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: limitless-checker
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
